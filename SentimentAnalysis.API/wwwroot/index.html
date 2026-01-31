@@ -1,0 +1,135 @@
+﻿<!DOCTYPE html>
+<!--suppress ExceptionCaughtLocallyJS -->
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحلیل هوشمند احساسات</title>
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/misc/Farsi-Digits/font-face.css" rel="stylesheet" type="text/css" />
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>🔍 تحلیل احساسات متن</h1>
+    <textarea id="inputText" dir="auto" placeholder="متن خود را اینجا بنویسید"></textarea>
+
+    <button id="analyzeBtn" onclick="analyzeSentiment()">
+        <span class="spinner" id="loadingSpinner"></span>
+        <span id="btnText">بررسی حس متن</span>
+    </button>
+    <button id="mashupBtn" class="mashup-btn" onclick="fetchRandomQuote()">
+        🎲 شانس
+    </button>
+
+    <div id="resultArea">
+        <h3 id="resultTitle" style="margin: 0 0 8px 0;"></h3>
+        <div style="font-size: 0.9rem; opacity: 0.8;">
+            درصد اطمینان: <span id="confidenceScore" style="font-weight: bold;"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function analyzeSentiment() {
+        const input = document.getElementById('inputText').value;
+        const btn = document.getElementById('analyzeBtn');
+        const spinner = document.getElementById('loadingSpinner');
+        const btnText = document.getElementById('btnText');
+        const resultArea = document.getElementById('resultArea');
+        const resultTitle = document.getElementById('resultTitle');
+        const confidenceScore = document.getElementById('confidenceScore');
+
+        if (!input.trim()) {
+            alert('لطفا یک متن وارد کنید!');
+            return;
+        }
+
+        btn.disabled = true;
+        spinner.style.display = 'block';
+        btnText.textContent = 'در حال پردازش...';
+        resultArea.style.display = 'none';
+
+        try {
+            const response = await fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: input })
+            });
+
+            if (!response.ok) throw new Error('Network response was not ok');
+
+            const data = await response.json();
+
+            let confidencePercent = data.confidence * 100;
+            let actualConfidence = confidencePercent >= 50 ? confidencePercent : (100 - confidencePercent);
+
+            let displayLabel;
+            let displayClass;
+
+            if (Math.abs(confidencePercent - 50) < 20) {
+                displayClass = 'neutral';
+                displayLabel = 'خنثی / واقعی 😐';
+            } else {
+                if (data.isPositive) {
+                    displayClass = 'positive';
+                    displayLabel = 'حس مثبت 😊';
+                } else {
+                    displayClass = 'negative';
+                    displayLabel = 'حس منفی 😞';
+                }
+            }
+
+            resultArea.style.display = 'block';
+            resultArea.className = displayClass;
+            resultTitle.textContent = displayLabel;
+
+            confidenceScore.textContent = `${actualConfidence.toFixed(1)}%`;
+
+        } catch (error) {
+            alert('خطا در ارتباط با سرور: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+            btnText.textContent = 'بررسی حس متن';
+        }
+    }
+
+    async function fetchRandomQuote() {
+        const txtArea = document.getElementById('inputText');
+        const mashupBtn = document.getElementById('mashupBtn');
+
+        mashupBtn.disabled = true;
+        mashupBtn.textContent = '...';
+
+        try {
+            const response = await fetch('https://api.adviceslip.com/advice');
+            if (!response.ok) throw new Error();
+            const data = await response.json();
+
+            txtArea.value = data.slip.advice;
+            txtArea.dispatchEvent(new Event('input'));
+            await analyzeSentiment();
+
+        } catch (error) {
+            try {
+                const fbRes = await fetch('https://api.quotable.io/random');
+                const fbData = await fbRes.json();
+                txtArea.value = fbData.content;
+                txtArea.dispatchEvent(new Event('input'));
+                await analyzeSentiment();
+            } catch (e) {
+                alert('خطا در دریافت متن: سرویس‌ها در دسترس نیستند.');
+            }
+        } finally {
+            mashupBtn.disabled = false;
+            mashupBtn.textContent = '🎲 شانس';
+        }
+    }
+</script>
+</body>
+</html>
